@@ -3,10 +3,14 @@ sys.path.append("../")
 import torch
 import fire 
 import pandas as pd
+import numpy as np
+import time
 import warnings
 warnings.filterwarnings('ignore')
 import os
 os.environ["WANDB_SILENT"] = "True"
+import os
+os.environ["WANDB_MODE"] = "disabled"
 import signal 
 import copy 
 import gpytorch
@@ -28,6 +32,7 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 # for specific tasks
 from tasks.hartmannn import Hartmann6D
 from tasks.rover import RoverObjective
+from tasks.styblinski_tang import StyblinskiTangObjective
 try:
     from tasks.lunar import LunarLanderObjective
     successful_lunar_import = True
@@ -47,6 +52,7 @@ except:
 
 task_id_to_objective = {}
 task_id_to_objective['hartmann6'] = Hartmann6D
+task_id_to_objective['styblinski_tang'] = StyblinskiTangObjective
 if successful_lunar_import:
     task_id_to_objective['lunar'] = LunarLanderObjective 
 task_id_to_objective['rover'] = RoverObjective
@@ -102,7 +108,7 @@ class Optimize(object):
         seed: int=None,
         wandb_entity: str="",
         wandb_project_name: str="",
-        max_n_oracle_calls: int=20_000,
+        max_n_oracle_calls: int=2_000,
         bsz: int=20,
         train_bsz: int=32,
         num_initialization_points: int=100,
@@ -196,6 +202,7 @@ class Optimize(object):
         self.acq_func=acq_func
         self.num_kg_samples = num_kg_samples
         self.use_kg = use_kg
+        self.task_id = task_id
         self.num_mc_samples_qei = num_mc_samples_qei
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         set_seed(seed)
@@ -418,6 +425,11 @@ class Optimize(object):
                         batch_size=self.bsz,
                         best_value=self.train_y.max().item(),
                     )
+        timestamp = int(time.time())
+        output_dir = f"observations-{self.task_id}-{timestamp}"
+        os.makedirs(output_dir, exist_ok=True)
+        np.save(os.path.join(output_dir, "X_observed.npy"), self.train_x.cpu().numpy())
+        np.save(os.path.join(output_dir, "Y_observed.npy"), self.train_y.cpu().numpy())
         self.tracker.finish()
         return self
 
